@@ -5,7 +5,7 @@ from langgraph.graph import StateGraph, END
 import asyncio
 import json
 
-from memory.draft import DraftState
+from memory.draft import DraftState, InitialDraftState
 from . import \
     ResearchAgent, \
     ReviewerAgent, \
@@ -55,22 +55,40 @@ class EditorAgent:
             "date": plan.get("date"),
             "sections": plan.get("sections")
         }
-
-    async def run_parallel_research(self, research_state: dict):
+    
+    async def run_parallel_initial_depth_research(self, research_state: dict):
         research_agent = ResearchAgent()
+        queries = research_state.get("sections")
+        title = research_state.get("title")
+        workflow = StateGraph(InitialDraftState)
+
+        workflow.add_node("researcher", research_agent.run_depth_research)
+
+        workflow.set_entry_point("researcher")
+        workflow.add_edge('researcher', END)
+
+        chain = workflow.compile()
+        print_agent_output(f"Running the following research tasks initialization in parallel: {queries}...", agent="EDITOR")
+        drafts = [chain.ainvoke({"task": research_state.get("task"), "topic": query, "title": title})
+                        for query in queries]
+        final_drafts = [result['draft'] for result in await asyncio.gather(*drafts)]
+
+        return {"initial_drafts": final_drafts}
+
+
+    async def run_parallel_revision(self, research_state: dict):
         reviewer_agent = ReviewerAgent()
         reviser_agent = ReviserAgent()
         queries = research_state.get("sections")
         title = research_state.get("title")
+        initial_drafts = research_state.get("initial_drafts")
         workflow = StateGraph(DraftState)
 
-        workflow.add_node("researcher", research_agent.run_depth_research)
         workflow.add_node("reviewer", reviewer_agent.run)
         workflow.add_node("reviser", reviser_agent.run)
 
         # set up edges researcher->reviewer->reviser->reviewer...
-        workflow.set_entry_point("researcher")
-        workflow.add_edge('researcher', 'reviewer')
+        workflow.set_entry_point("reviewer")
         workflow.add_edge('reviser', 'reviewer')
         workflow.add_conditional_edges('reviewer',
                                        (lambda draft: "accept" if draft['review'] is None else "revise"),
@@ -79,9 +97,9 @@ class EditorAgent:
         chain = workflow.compile()
 
         # Execute the graph for each query in parallel
-        print_agent_output(f"Running the following research tasks in parallel: {queries}...", agent="EDITOR")
-        final_drafts = [chain.ainvoke({"task": research_state.get("task"), "topic": query, "title": title})
-                        for query in queries]
+        print_agent_output(f"Running the following Revision tasks in parallel: {queries}...", agent="EDITOR")
+        final_drafts = [chain.ainvoke({"task": research_state.get("task"), "topic": query, "title": title, "draft": initial_draft})
+                        for query, initial_draft in zip(queries, initial_drafts)]
         research_results = [result['draft'] for result in await asyncio.gather(*final_drafts)]
 
         return {"research_data": research_results}

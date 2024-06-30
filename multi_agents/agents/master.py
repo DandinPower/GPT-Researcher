@@ -32,13 +32,15 @@ class ChiefEditorAgent:
         # Add nodes for each agent
         workflow.add_node("browser", research_agent.run_initial_research)
         workflow.add_node("planner", editor_agent.plan_research)
-        workflow.add_node("researcher", editor_agent.run_parallel_research)
+        workflow.add_node("researcher", editor_agent.run_parallel_initial_depth_research)
+        workflow.add_node("revisor", editor_agent.run_parallel_revision)
         workflow.add_node("writer", writer_agent.run)
         workflow.add_node("publisher", publisher_agent.run)
 
         workflow.add_edge('browser', 'planner')
         workflow.add_edge('planner', 'researcher')
-        workflow.add_edge('researcher', 'writer')
+        workflow.add_edge('researcher', 'revisor')
+        workflow.add_edge('revisor', 'writer')
         workflow.add_edge('writer', 'publisher')
 
         # set up start and end nodes

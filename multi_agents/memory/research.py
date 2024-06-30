@@ -6,6 +6,7 @@ class ResearchState(TypedDict):
     task: dict
     initial_research: str
     sections: List[str]
+    initial_drafts: List[dict]
     research_data: List[dict]
     # Report layout
     title: str
@@ -16,5 +17,3 @@ class ResearchState(TypedDict):
     conclusion: str
     sources: List[str]
     report: str
-
-
